@@ -287,24 +287,87 @@ The data dictionary is as follows
 -   In this dataset, how likely are fraudulent transactions? Generate a table that summarizes the number and frequency of fraudulent transactions per year.
 
 ```{r}
-
+card_fraud %>% 
+  group_by(trans_year,is_fraud) %>% 
+  summarise(total_trans=n())%>% 
+  mutate(freq_in_percentage=total_trans/sum(total_trans)*100)
+  
 ```
 
 -   How much money (in US\$ terms) are fraudulent transactions costing the company? Generate a table that summarizes the total amount of legitimate and fraudulent transactions per year and calculate the % of fraudulent transactions, in US\$ terms.
 
 ```{r}
-
+card_fraud %>% 
+  group_by(trans_year,is_fraud) %>% 
+  summarise(total_amount=sum(amt))%>% 
+  mutate(freq_in_percentage=total_amount/sum(total_amount)*100)
 ```
 
 -   Generate a histogram that shows the distribution of amounts charged to credit card, both for legitimate and fraudulent accounts. Also, for both types of transactions, calculate some quick summary statistics.
 
 ```{r}
+#Summary
+summary(card_fraud$amt)
+card_fraud %>% 
+  group_by(is_fraud) %>% 
+  summarise(mins=min(amt),means=mean(amt),maxs=max(amt))
+
+
+
+#Histogram for non_fradulent
+card_fraud %>% 
+  filter(is_fraud==0) %>% 
+  ggplot(aes(x=amt))+geom_histogram(fill="pink")+ labs(
+    title="Histogram of amount $ for non-fraudulent accounts",
+    y="count",
+    x="Amount in USD"
+    
+  )+theme_minimal()
+#Histogram for fradulent
+card_fraud %>% 
+  filter(is_fraud==1) %>% 
+  ggplot(aes(x=amt))+geom_histogram(fill="cyan")+ labs(
+    title="Histogram of amount $ for fraudulent accounts",
+    y="count",
+    x="Amount in USD"
+    
+  )+theme_minimal()
+
+
+
+
+
+#Histogram of both combined, 
+#Its seems that amounts are very volatile and depending of fraudulent and non fraudulent, for the histogram I will exclude outliers by randomly using the threshold of 2000 which is a little bit higher than the maximum amount of fraudulent amounts. Also, there are many small amounts of non-fraudulent occurring, so I am using a min threshold of 300, just to see a good representation of distribution among fraudulent and non-fraudulent.
+
+card_fraud %>% 
+  filter(amt<2000 & amt>300) %>% 
+  mutate(fraud=ifelse(is_fraud==1,"Yes","No")) %>% 
+ggplot(aes(x=amt,fill=fraud))+geom_histogram(position="dodge")+theme_minimal()+labs(
+  title="Histogram of amount in USD of fraudulent vs non fraudulent transactions from $300-$2000",
+  x="Amount in USD",
+  y="Frequency"
+)
+
+
 
 ```
 
 -   What types of purchases are most likely to be instances of fraud? Consider category of merchants and produce a bar chart that shows % of total fraudulent transactions sorted in order.
 
 ```{r}
+card_fraud %>% 
+  filter(is_fraud==1) %>% 
+  count(category) %>% 
+  mutate(freq=n/sum(n)) %>% 
+  mutate(category=fct_reorder(category,freq)) %>% 
+  ggplot(aes(y=freq,x=category,fill=category))+geom_col()+theme_minimal()+labs(
+    title="Percentage of fraudulent transactions by type of merchant in % of total",
+    x=NULL,
+    y="Frequency"
+  )+ scale_x_discrete(labels=NULL, breaks=NULL)+ scale_y_continuous(labels = scales::percent, limits=c(0,0.3))
+  
+
 
 ```
 
@@ -318,6 +381,32 @@ mutate(
   weekday = lubridate::wday(trans_date_trans_time, label = TRUE)
   )
 ```
+```{r}
+hist_time<-function(time){
+    card_fraud %>% 
+    filter(is_fraud==1) %>% 
+  mutate(
+  date_only = lubridate::date(trans_date_trans_time),
+  month_name = lubridate::month(trans_date_trans_time, label=TRUE),
+  hour = lubridate::hour(trans_date_trans_time),
+  weekday = lubridate::wday(trans_date_trans_time, label = TRUE)
+  ) %>% 
+    count({{time}}) %>% 
+  ggplot(aes(x={{time}},y=n))+geom_col(fill="blue")+theme_minimal()+labs(
+    y="Frequency"
+  )
+   
+  }
+
+
+hist_time(month_name)
+hist_time(hour)
+hist_time(weekday)
+
+
+
+```
+
 
 -   Are older customers significantly more likely to be victims of credit card fraud? To calculate a customer's age, we use the `lubridate` package and the following code
 
@@ -328,6 +417,12 @@ mutate(
 ```
 
 ```{r}
+card_fraud %>% 
+  filter(is_fraud==1) %>% 
+  mutate(age = interval(dob, trans_date_trans_time) / years(1),
+    ) %>% 
+  count(age)
+  
 
 ```
 
@@ -358,6 +453,17 @@ card_fraud <- card_fraud %>%
 ```
 
 Plot a boxplot or a violin plot that looks at the relationship of distance and `is_fraud`. Does distance seem to be a useful feature in explaining fraud?
+
+```{r}
+card_fraud %>% 
+  mutate(fraud=ifelse(is_fraud==1,"Yes","No")) %>% 
+ggplot(aes(x=fraud,y=distance_km))+geom_boxplot()
+
+card_fraud %>% 
+  mutate(fraud=ifelse(is_fraud==1,"Yes","No")) %>% 
+ggplot(aes(x=fraud,y=distance_km))+geom_violin()
+```
+
 
 # Exploring sources of electricity production, CO2 emissions, and GDP per capita.
 
