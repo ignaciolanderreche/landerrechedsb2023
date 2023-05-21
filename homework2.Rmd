@@ -26,6 +26,7 @@ library(wbstats)
 library(skimr)
 library(countrycode)
 library(here)
+library(patchwork)
 ```
 
 # Data Visualisation - Exploration
@@ -463,7 +464,7 @@ card_fraud %>%
   mutate(fraud=ifelse(is_fraud==1,"Yes","No")) %>% 
 ggplot(aes(x=fraud,y=distance_km))+geom_violin()
 ```
-
+_Answer_ It doesn't seem like fraud is related to distance!!
 
 # Exploring sources of electricity production, CO2 emissions, and GDP per capita.
 
@@ -535,35 +536,87 @@ gdp_percap <- wb_data(country = "countries_only",
          GDPpercap = value)
 ```
 
-Specific questions:
 
-1.  How would you turn `energy` to long, tidy format?
-2.  You may need to join these data frames
-    -   Use `left_join` from `dplyr` to [join the tables](http://r4ds.had.co.nz/relational-data.html)
-    -   To complete the merge, you need a unique *key* to match observations between the data frames. Country names may not be consistent among the three dataframes, so please use the 3-digit ISO code for each country
-    -   An aside: There is a great package called [`countrycode`](https://github.com/vincentarelbundock/countrycode) that helps solve the problem of inconsistent country names (Is it UK? United Kingdom? Great Britain?). `countrycode()` takes as an input a country's name in a specific format and outputs it using whatever format you specify.
-3.  Write a function that takes as input any country's name and returns all three graphs. You can use the `patchwork` package to arrange the three graphs as shown below
+```{r}
 
-![](images/electricity-co2-gdp.png)
+#Changing data  to long table
+type_energy<-energy %>% 
+  select(-c(electricity_demand,electricity_generation,net_elec_imports,energy_per_capita,energy_per_gdp,per_capita_electricity)) %>% 
+  pivot_longer(cols=4:12, names_to="Source",values_to="Values")
 
-# Deliverables
 
-There is a lot of explanatory text, comments, etc. You do not need these, so delete them and produce a stand-alone document that you could share with someone. Knit the edited and completed R Markdown (qmd) file as a Word or HTML document (use the "Knit" button at the top of the script editor window) and upload it to Canvas. You must be comitting and pushing your changes to your own Github repo as you go along.
+#Joining tables to generate second and third chart
+first_table<-energy %>% 
+  filter(year>=2000) %>% 
+  select(c(country,year,electricity_demand,electricity_generation,net_elec_imports,energy_per_capita,energy_per_gdp,per_capita_electricity)) %>%
+  mutate(country=ifelse(country=="Turkiye","Turkey",country)) %>% 
+  mutate(iso=countrycode(country,"country.name",destination="iso3c"))
+ 
+
+gdp_percap2<-gdp_percap %>% 
+  filter(year>=2000) %>% 
+  select(country,year,GDPpercap) %>% 
+  mutate(country=ifelse(country=="Turkiye","Turkey",country)) %>% 
+  mutate(iso=countrycode(country,"country.name",destination="iso3c"))%>% 
+  select(-country)
+
+co2_percap2<-co2_percap %>% 
+  filter(year>=2000) %>% 
+  select(country,year,co2percap) %>% 
+  mutate(country=ifelse(country=="Turkiye","Turkey",country)) %>% 
+  mutate(iso=countrycode(country,"country.name",destination="iso3c")) %>% 
+  select(-country)
+
+#Left joining
+
+final_table<- first_table %>%  
+  left_join(gdp_percap2,by=c("year"="year","iso"="iso")) %>% 
+  left_join(co2_percap2,by=c("year"="year","iso"="iso"))
+  
+#Function for 3 graphs- NOTE: the country needs to be in ISO3 format
+
+three_graphs<-function(country){
+  
+# First Chart
+g1<-type_energy %>% 
+  filter(iso_code=={{country}},year>=2000)%>% 
+  ggplot(aes(x=year,y=Values,fill=Source))+geom_area(colour="grey90",alpha = 0.5, position = "fill")+scale_y_continuous(labels = scales::percent)+theme_minimal()+labs(
+    title="Electricity production mix",
+    y=NULL,
+    x=NULL
+  )
+
+#second chart
+g2<-final_table %>% 
+  filter(iso=={{country}},year>=2000) %>% 
+  ggplot(aes(x=GDPpercap,y=co2percap,label=year))+geom_point()+geom_text(hjust=0.1, vjust=0.1)+theme_minimal()+labs(
+    title="CO2 vs GDP per capita",
+    x="GDP per capita",
+    y= "CO2 per capita"
+  )+scale_x_continuous(labels=scales::dollar_format())
+
+#Third Chart
+g3<-final_table %>% 
+  filter(iso=={{country}},year>=2000) %>% 
+  ggplot(aes(y=co2percap,x=per_capita_electricity,label=year))+geom_point()+geom_text(hjust=0.1, vjust=0.1)+theme_minimal()+labs(
+    title="CO2 vs electricity consumption per capita/day",
+    y="CO2 per capita",
+    x= "Electricity used (kWh) per capita/day"
+  )
+(g1/(g2|g3))
+}
+
+three_graphs("MEX")
+three_graphs("GBR")
+```
+
 
 # Details
 
--   Who did you collaborate with: TYPE NAMES HERE
--   Approximately how much time did you spend on this problem set: ANSWER HERE
--   What, if anything, gave you the most trouble: ANSWER HERE
+-   Who did you collaborate with: Only wiht myself
+-   Approximately how much time did you spend on this problem set: Around 5 hours
+-   What, if anything, gave you the most trouble: Labels and calculating frequencies
 
-**Please seek out help when you need it,** and remember the [15-minute rule](https://dsb2023.netlify.app/syllabus/#the-15-minute-rule){target="_blank"}. You know enough R (and have enough examples of code from class and your readings) to be able to do this. If you get stuck, ask for help from others, post a question on Slack-- and remember that I am here to help too!
 
-> As a true test to yourself, do you understand the code you submitted and are you able to explain it to someone else?
 
-# Rubric
 
-13/13: Problem set is 100% completed. Every question was attempted and answered, and most answers are correct. Code is well-documented (both self-documented and with additional comments as necessary). Used tidyverse, instead of base R. Graphs and tables are properly labelled. Analysis is clear and easy to follow, either because graphs are labeled clearly or you've written additional text to describe how you interpret the output. Multiple Github commits. Work is exceptional. I will not assign these often.
-
-8/13: Problem set is 60--80% complete and most answers are correct. This is the expected level of performance. Solid effort. Hits all the elements. No clear mistakes. Easy to follow (both the code and the output). A few Github commits.
-
-5/13: Problem set is less than 60% complete and/or most answers are incorrect. This indicates that you need to improve next time. I will hopefully not assign these often. Displays minimal effort. Doesn't complete all components. Code is poorly written and not documented. Uses the same type of plot for each graph, or doesn't use plots appropriate for the variables being analyzed. No Github commits.
